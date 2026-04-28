@@ -138,8 +138,11 @@ function shoot(){
 function pass(){
  const p=roster[sel];
  if(player.hasPuck||dist(puck,player)<78){
-  puck.heldBy=null;player.hasPuck=false;let dx=mate.x-puck.x,dy=mate.y-puck.y,m=Math.hypot(dx,dy)||1;
-  puck.vx=dx/m*(5+p.pass/12);puck.vy=dy/m*(5+p.pass/12);say(p.nick==="HONEY BADGER"?"SAUCER THROUGH TRAFFIC!":"PASS!",1);burst(puck.x,puck.y,p.trim,7);
+  puck.heldBy=null; player.hasPuck=false; mate.hasPuck=false; mate.passHold=0;
+  let dx=mate.x-puck.x,dy=mate.y-puck.y,m=Math.hypot(dx,dy)||1;
+  puck.vx=dx/m*(5+p.pass/12); puck.vy=dy/m*(5+p.pass/12);
+  say(p.nick==="HONEY BADGER"?"SAUCER THROUGH TRAFFIC!":"PASS!",1);
+  burst(puck.x,puck.y,p.trim,7);
  }
 }
 function checkOrSpecial(){
@@ -162,6 +165,36 @@ function checkOrSpecial(){
  else if(p.nick==="DEMPS"){if(Math.random()<.25){puck.heldBy=null;player.hasPuck=false;puck.vx=13;puck.vy=(Math.random()-.5)*8;}}
 }
 
+
+function teammateReceivePuck(){
+ if(!mate.hasPuck && !player.hasPuck && dist(puck,mate)<34){
+   mate.hasPuck=true;
+   mate.passHold=0.65;
+   puck.heldBy="mate";
+   puck.vx=0; puck.vy=0;
+   say("PASS CONNECTED!",.65);
+ }
+ if(mate.hasPuck){
+   const stickX=mate.x+34, stickY=mate.y+38;
+   puck.x+=(stickX-puck.x)*0.72;
+   puck.y+=(stickY-puck.y)*0.72;
+   puck.vx=mate.vx*3; puck.vy=mate.vy*3;
+   mate.passHold-=1/60;
+   if(mate.passHold<=0){
+     mate.hasPuck=false;
+     puck.heldBy=null;
+     puck.vx=8;
+     puck.vy=(270-puck.y)*0.04;
+     say("ONE-TIMER!",.6);
+   }
+ }
+}
+
+function clampDefender(d){
+ d.x=Math.max(70,Math.min(780,d.x));
+ d.y=Math.max(115,Math.min(425,d.y));
+}
+
 function update(dt){
  if(mode!=="play")return;
  const p=roster[sel];timeLeft-=dt;cool=Math.max(0,cool-dt);msgT=Math.max(0,msgT-dt);player.boost=Math.max(0,player.boost-dt);shake=Math.max(0,shake-dt*35);flash=Math.max(0,flash-dt);firePuck=Math.max(0,firePuck-dt);
@@ -173,8 +206,8 @@ function update(dt){
  player.x=Math.max(45,Math.min(880,player.x));player.y=Math.max(95,Math.min(445,player.y));
  if(Math.abs(player.vx)+Math.abs(player.vy)>1.4){hitMeter=Math.min(100,hitMeter+.3);if(Math.random()<.22)iceSpray(player.x,player.y,player.face,1);}
  mate.x+=(player.x-80-mate.x)*.025;mate.y+=(player.y-75-mate.y)*.025;
- defenders.forEach(d=>{d.stun=Math.max(0,d.stun-dt);d.down=Math.max(0,d.down-dt);if(d.down<=0&&d.stun<=0){let dx=player.x-d.x,dy=player.y-d.y,dm=Math.hypot(dx,dy)||1;d.vx+=dx/dm*.18;d.vy+=dy/dm*.18;}else{d.vx*=.92;d.vy*=.92;}d.vx*=.85;d.vy*=.85;d.x+=d.vx;d.y+=d.vy;});
- tryPossession(); if(player.hasPuck)attachPuckToPlayer(); else{puck.x+=puck.vx;puck.y+=puck.vy;puck.vx*=.985;puck.vy*=.985;}
+ defenders.forEach(d=>{d.stun=Math.max(0,d.stun-dt);d.down=Math.max(0,d.down-dt);if(d.down<=0&&d.stun<=0){let dx=player.x-d.x,dy=player.y-d.y,dm=Math.hypot(dx,dy)||1;d.vx+=dx/dm*.18;d.vy+=dy/dm*.18;}else{d.vx*=.92;d.vy*=.92;}d.vx*=.85;d.vy*=.85;d.x+=d.vx;d.y+=d.vy;clampDefender(d);});
+ tryPossession(); teammateReceivePuck(); if(player.hasPuck)attachPuckToPlayer(); else if(mate.hasPuck){} else{puck.x+=puck.vx;puck.y+=puck.vy;puck.vx*=.985;puck.vy*=.985;}
  if(firePuck>0)fireTrail(puck.x,puck.y,4);
  if(puck.y<90||puck.y>450)puck.vy*=-.75;puck.y=Math.max(90,Math.min(450,puck.y));if(puck.x<35){puck.x=35;puck.vx*=-.6;}
  goalie.y+=goalie.dir*2.3;if(goalie.y<190||goalie.y>350)goalie.dir*=-1;
@@ -199,7 +232,7 @@ function drawPlay(){
  drawPixelSkater(mate.x,mate.y,{...p,num:"AI"},.9,1,false);
  drawPixelSkater(player.x,player.y,p,1.25,player.face,false);
  ctx.fillStyle=firePuck>0?"#ff3b00":"#111";ctx.beginPath();ctx.ellipse(puck.x,puck.y,firePuck>0?16:12,firePuck>0?8:6,0,0,Math.PI*2);ctx.fill();
- if(player.hasPuck){ctx.strokeStyle=p.trim;ctx.lineWidth=2;ctx.beginPath();ctx.arc(player.x,player.y,46,0,Math.PI*2);ctx.stroke();}
+ if(player.hasPuck){ctx.strokeStyle=p.trim;ctx.lineWidth=2;ctx.beginPath();ctx.arc(player.x,player.y,46,0,Math.PI*2);ctx.stroke();} if(mate.hasPuck){ctx.strokeStyle='#ffdc5e';ctx.lineWidth=2;ctx.beginPath();ctx.arc(mate.x,mate.y,38,0,Math.PI*2);ctx.stroke();}
  particles.forEach(q=>{ctx.globalAlpha=Math.max(0,q.t);ctx.fillStyle=q.col;ctx.fillRect(q.x,q.y,q.size,q.size);ctx.globalAlpha=1;});
  ctx.restore();
  rect(0,0,960,72,"rgba(0,0,0,.85)");txt(`${p.name} "${p.nick}" #${p.num}`,20,28,18);txt(`GOALS ${score}/3`,20,55,18,p.trim);
